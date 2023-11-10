@@ -184,31 +184,168 @@ void write_statistics(int statistica_fd, const char *file_name, int width, int h
 
 }
 
-int main(int argc, char *argv[])
+void write_statistics_non_bmp(int statistica_fd, const char *file_name, struct stat *file_info)
 {
-    if(argc != 2) 
-    {
-        printf("Usage %s <fisier_intrare>\n", argv[0]);
-        exit(1);
-    }
-    int input_fd = open_input_file(argv[1]);
-    int statistica_fd = create_stat_file();
-    
+    char buffer_str[128];
+
+    sprintf(buffer_str, "Nume fisier: %s\n", file_name);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    sprintf(buffer_str, "Dimensiune in octeti: <%ld>\n", file_info->st_size);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    sprintf(buffer_str, "Identificatorul utilizatorului: <%d>\n", file_info->st_uid);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    struct tm *modification_time = localtime(&file_info->st_mtime);
+    sprintf(buffer_str, "Timpul ultimei modificari: %02d.%02d.%04d\n",
+        modification_time->tm_mday, modification_time->tm_mon + 1,
+        modification_time->tm_year + 1900);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    sprintf(buffer_str, "Numarul de legaturi: <%ld>\n", file_info->st_nlink);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    char drepturi[4];
+    strcpy(drepturi, drepturi_acces_user(file_info, drepturi));
+    sprintf(buffer_str, "Drepturi de acces user: %s\n", drepturi);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    strcpy(drepturi, drepturi_acces_grup(file_info, drepturi));
+    sprintf(buffer_str, "Drepturi de acces grup: %s\n", drepturi);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+    strcpy(drepturi, drepturi_acces_altii(file_info, drepturi));
+    sprintf(buffer_str, "Drepturi de acces altii: %s\n", drepturi);
+    write(statistica_fd,buffer_str,strlen(buffer_str));
+
+}
+
+void write_statistics_symbolic_link(int statistica_fd, const char *file_name, struct stat *file_info)
+{
+        char buffer_str[1024]; //pt a stoca calea fisierului tinta pt leg simbolica
+        ssize_t buffer_str_size = readlink(file_name, buffer_str, sizeof(buffer_str) - 1);
+        if (buffer_str_size == -1) {
+            perror("Eroare la citirea legăturii simbolice");
+            exit(1);
+        }
+        buffer_str[buffer_str_size] = '\0';
+        // Obține informații despre fișierul țintă
+        struct stat target_file_info;
+        if (stat(buffer_str, &target_file_info) == -1) {
+            perror("Eroare la obținerea informațiilor despre fișierul țintă");
+            exit(1);
+        }
+
+        sprintf(buffer_str, "Nume legatura: %s\n", file_name);
+        write(statistica_fd, buffer_str, strlen(buffer_str));
+
+        sprintf(buffer_str, "Dimensiune legatura: %ld\n", buffer_str_size);
+        write(statistica_fd, buffer_str, strlen(buffer_str));
+
+        sprintf(buffer_str, "Dimensiune fisier target: %ld\n", target_file_info.st_size);
+        write(statistica_fd, buffer_str, strlen(buffer_str));
+
+        char drepturi[4];
+        strcpy(drepturi, drepturi_acces_user(&target_file_info, drepturi));
+        sprintf(buffer_str, "Drepturi de acces user legatura: %s\n", drepturi);
+        write(statistica_fd, buffer_str, strlen(buffer_str));
+
+        strcpy(drepturi, drepturi_acces_grup(&target_file_info, drepturi));
+        sprintf(buffer_str, "Drepturi de acces grup legatura: %s\n", drepturi);
+        write(statistica_fd, buffer_str, strlen(buffer_str));
+
+        strcpy(drepturi, drepturi_acces_altii(&target_file_info, drepturi));
+        sprintf(buffer_str, "Drepturi de acces altii legatura: %s\n", drepturi);
+        write(statistica_fd, buffer_str, strlen(buffer_str));
+}
+
+void write_statistics_director(int statistica_fd, const char *file_name, struct stat *file_info)
+{
+    char buffer_str[256];
+    sprintf(buffer_str, "Nume director: %s\n", file_name);
+    write(statistica_fd, buffer_str, strlen(buffer_str));
+
+    sprintf(buffer_str, "Identificatorul utilizatorului: %d\n", file_info->st_uid);
+    write(statistica_fd, buffer_str, strlen(buffer_str));
+
+    char drepturi[4];
+    strcpy(drepturi, drepturi_acces_user(file_info, drepturi));
+    sprintf(buffer_str, "Drepturi de acces user: %s\n", drepturi);
+    write(statistica_fd, buffer_str, strlen(buffer_str));
+
+    strcpy(drepturi, drepturi_acces_grup(file_info, drepturi));
+    sprintf(buffer_str, "Drepturi de acces grup: %s\n", drepturi);
+    write(statistica_fd, buffer_str, strlen(buffer_str));
+
+    strcpy(drepturi, drepturi_acces_altii(file_info, drepturi));
+    sprintf(buffer_str, "Drepturi de acces altii: %s\n", drepturi);
+    write(statistica_fd, buffer_str, strlen(buffer_str));
+}
+
+void process_director(const char *file_name, int statistica_fd)
+{
+    int input_fd = open_input_file(file_name);
 
     //variabilele pentru statistici
     int width, height, size;
     struct stat file_info;
-    if (fstat(input_fd, &file_info) == -1) 
+    if (stat(file_name, &file_info) == -1)
     {
         perror("Eroare la obtinerea informatiilor despre fisier");
         exit(1);
     }
 
-    read_bmp_info(input_fd, &width, &height, &size);
-    write_statistics(statistica_fd, argv[1], width, height, size, &file_info);
+    // in caz ca fisierul dat e legatura simbolica
+    struct stat file_info2;
+    if (lstat(file_name, &file_info2) == -1) {
+        perror("Eroare la obținerea informațiilor despre leg simbolica");
+        exit(EXIT_FAILURE);
+    }
+
+    //verific extensia fisierului pentru a vedea de ce tip e, daca e bmp
+    char *ext = strrchr(file_name, '.');
+    
+    if(ext && strcmp(ext, ".bmp") == 0)
+    {
+        // daca e fisier bmp
+        read_bmp_info(input_fd, &width, &height, &size);
+        write_statistics(statistica_fd, file_name, width, height, size, &file_info);
+    }
+    else if (S_ISREG(file_info.st_mode) && S_ISLNK(file_info2.st_mode) == 0)
+    {
+        // daca e fisier obisnuit, fara bmp
+        write_statistics_non_bmp(statistica_fd, file_name, &file_info);
+    }
+    else if (S_ISLNK(file_info2.st_mode))
+    {
+        // Este o legătură simbolică
+        write_statistics_symbolic_link(statistica_fd, file_name, &file_info2);
+    }
+    else if (S_ISDIR(file_info.st_mode))
+    {
+        // Este un director
+        write_statistics_director(statistica_fd, file_name, &file_info);
+    }
+    else
+    {
+        printf("Nu scriem nimic in fisier :(");
+    }
 
     close_file(input_fd);
-    close_file(statistica_fd);
+}
 
+int main(int argc, char *argv[])
+{
+    if(argc != 2) /* ./program <director_intrare> */
+    {
+        printf("Usage %s <director_intrare>\n", argv[0]);
+        exit(1);
+    }
+    
+    int statistica_fd = create_stat_file();
+    process_director(argv[1], statistica_fd);
+
+    close_file(statistica_fd);
     return 0;
 }
