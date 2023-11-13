@@ -1,9 +1,51 @@
+
+director/folder
+director
+Nume director: folder
+Identificatorul utilizatorului: 1000
+Drepturi de acces user: RWX
+Drepturi de acces grup: R-X
+Drepturi de acces altii: R-X
+
+director/imagine.bmp
 Nume fisier: imagine.bmp
 Inaltime: 1280
 Lungime: 1920
 Dimensiune in octeti: <7372938>
 Identificatorul utilizatorului: <1000>
 Timpul ultimei modificari: 08.11.2023
+Numarul de legaturi: <1>
+Drepturi de acces user: RW-
+Drepturi de acces grup: R--
+Drepturi de acces altii: R--
+
+
+director/leg_simbolica.c
+fisier obisnuit fara bmp
+Nume fisier: leg_simbolica.c
+Dimensiune in octeti: <1618>
+Identificatorul utilizatorului: <1000>
+Timpul ultimei modificari: 10.11.2023
+Numarul de legaturi: <1>
+Drepturi de acces user: RW-
+Drepturi de acces grup: R--
+Drepturi de acces altii: R--
+
+director/symbolic_link.txt
+symbolic_link.txt
+Nume legatura: director/symbolic_link.txt
+Dimensiune legatura: 15
+Dimensiune fisier target: 16
+Drepturi de acces user legatura: RW-
+Drepturi de acces grup legatura: R--
+Drepturi de acces altii legatura: R--
+
+director/target_file.txt
+fisier obisnuit fara bmp
+Nume fisier: target_file.txt
+Dimensiune in octeti: <16>
+Identificatorul utilizatorului: <1000>
+Timpul ultimei modificari: 13.11.2023
 Numarul de legaturi: <1>
 Drepturi de acces user: RW-
 Drepturi de acces grup: R--
