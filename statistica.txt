@@ -19,7 +19,6 @@ Drepturi de acces user: RW-
 Drepturi de acces grup: R--
 Drepturi de acces altii: R--
 
-
 director/leg_simbolica.c
 fisier obisnuit fara bmp
 Nume fisier: leg_simbolica.c

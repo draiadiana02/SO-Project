@@ -291,71 +291,7 @@ void write_statistics_director(int statistica_fd, const char *file_name, struct 
 
 void process_director(const char *file_name, int statistica_fd)
 {
-    //int input_fd = open_file(file_name);
-    int input_fd;
-    //variabilele pentru statistici
-    int width, height, size;
-    struct stat file_info;
-    if (stat(file_name, &file_info) == -1)
-    {
-        perror("Eroare la obtinerea informatiilor despre fisier");
-        exit(1);
-    }
-
-    // in caz ca fisierul dat e legatura simbolica
-    struct stat file_info2;
-    if (lstat(file_name, &file_info2) == -1) {
-        perror("Eroare la obținerea informațiilor despre leg simbolica");
-        exit(EXIT_FAILURE);
-    }
-
-    //verific extensia fisierului pentru a vedea de ce tip e, daca e bmp
-    char *ext = strrchr(file_name, '.');
-    
-    if(ext && strcmp(ext, ".bmp") == 0)
-    {
-        // daca e fisier bmp
-        read_bmp_info(input_fd, &width, &height, &size);
-        write_statistics(statistica_fd, file_name, width, height, size, &file_info);
-    }
-    else if (S_ISREG(file_info.st_mode) && S_ISLNK(file_info2.st_mode) == 0)
-    {
-        // daca e fisier obisnuit, fara bmp
-        write_statistics_non_bmp(statistica_fd, file_name, &file_info);
-    }
-    else if (S_ISLNK(file_info2.st_mode))
-    {
-        // Este o legătură simbolică
-        //write_statistics_symbolic_link(statistica_fd, file_name, &file_info2);
-    }
-    else if (S_ISDIR(file_info.st_mode))
-    {
-        // Este un director
-        write_statistics_director(statistica_fd, file_name, &file_info);
-    }
-    else
-    {
-        printf("Nu scriem nimic in fisier :(");
-    }
-
-    //close_director(input_fd);
-}
-
-
-
-int main(int argc, char *argv[])
-{
-    if(argc != 2) /* ./program <director_intrare> */
-    {
-        printf("Usage %s <director_intrare>\n", argv[0]);
-        exit(1);
-    }
-    
-    int statistica_fd = create_stat_file();
-    //process_director(argv[1], statistica_fd);
-
-    const char * file_name = argv[1];
-    DIR *dir = open_director(argv[1]);
+    DIR *dir = open_director(file_name);
 
     // Parcurge fiecare intrare din director
     struct dirent *entry;
@@ -370,7 +306,7 @@ int main(int argc, char *argv[])
         char filePath[512];
         char newLine[2] = "\n";
         write(statistica_fd, newLine,strlen(newLine) );
-        sprintf(filePath, "%s/%s", argv[1], entry->d_name);
+        sprintf(filePath, "%s/%s", file_name, entry->d_name);
         write(statistica_fd, filePath, strlen(filePath));
         write(statistica_fd, newLine,strlen(newLine) );
         
@@ -398,8 +334,6 @@ int main(int argc, char *argv[])
         int input_fd = open(filePath, O_RDONLY);
         read_bmp_info(input_fd, &width, &height, &size);
         write_statistics(statistica_fd, entry->d_name, width, height, size, &file_info);
-        char newLine[2] = "\n";
-        write(statistica_fd, newLine,strlen(newLine) );
     }
     else if (S_ISDIR(file_info.st_mode)) 
     {
@@ -414,7 +348,7 @@ int main(int argc, char *argv[])
         // Este o legătură simbolică
         char something[20] = "leg simbolica\n";
         write(statistica_fd, entry->d_name,strlen(entry->d_name));
-        write_statistics_symbolic_link(statistica_fd, filePath, &file_info2, argv[1]);
+        write_statistics_symbolic_link(statistica_fd, filePath, &file_info2, file_name);
     }
     else if (S_ISREG(file_info.st_mode) && S_ISLNK(file_info2.st_mode) == 0)
     {
@@ -427,6 +361,21 @@ int main(int argc, char *argv[])
     }
     // Închide directorul de intrare
     closedir(dir);
+}
+
+
+
+int main(int argc, char *argv[])
+{
+    if(argc != 2) /* ./program <director_intrare> */
+    {
+        printf("Usage %s <director_intrare>\n", argv[0]);
+        exit(1);
+    }
+    
+    int statistica_fd = create_stat_file();
+    process_director(argv[1], statistica_fd);
+    
     close(statistica_fd);
     return 0;
 }
