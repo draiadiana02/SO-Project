@@ -36,6 +36,7 @@ void close_director(DIR * dir)
         perror("Eroare la inchiderea directorului");
     }
 }
+
 int read_bmp_info(int input_fd, int *width, int *height, int *size)
 {
     if(lseek(input_fd, 18, SEEK_SET) == -1) {
@@ -289,24 +290,13 @@ void write_statistics_director(int statistica_fd, const char *file_name, struct 
     write(statistica_fd, buffer_str, strlen(buffer_str));
 }
 
-void process_director(const char *file_name, int statistica_fd)
+void process_entry(const char *file_name, const char *output_dir, const char *entry_name)
 {
-    DIR *dir = open_director(file_name);
-
-    // Parcurge fiecare intrare din director
-    struct dirent *entry;
-
-    while ((entry = readdir(dir)) != NULL) {
-    // Ignoră intrările curente și părinte
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-        continue;
-    }
-
         // Construiește calea completă pentru fiecare intrare
         char filePath[512];
         char newLine[2] = "\n";
         write(statistica_fd, newLine,strlen(newLine) );
-        sprintf(filePath, "%s/%s", file_name, entry->d_name);
+        sprintf(filePath, "%s/%s", file_name, entry_name);
         write(statistica_fd, filePath, strlen(filePath));
         write(statistica_fd, newLine,strlen(newLine) );
         
@@ -327,54 +317,66 @@ void process_director(const char *file_name, int statistica_fd)
     }
 
     //verific extensia fisierului pentru a vedea de ce tip e, daca e bmp
-    char *ext = strrchr(entry->d_name, '.');
+    char *ext = strrchr(entry_name, '.');
     
      if (ext && strcmp(ext, ".bmp") == 0) {
         // daca e fisier bmp
         int input_fd = open(filePath, O_RDONLY);
         read_bmp_info(input_fd, &width, &height, &size);
-        write_statistics(statistica_fd, entry->d_name, width, height, size, &file_info);
+        write_statistics(statistica_fd, entry_name, width, height, size, &file_info);
     }
     else if (S_ISDIR(file_info.st_mode)) 
     {
          // Este un director
-        char something[20] = "director\n";
+        char something[20] = "este director\n";
         write(statistica_fd, something,strlen(something) );
-        write_statistics_director(statistica_fd, entry->d_name, &file_info);
+        write_statistics_director(statistica_fd, entry_name, &file_info);
        
     }
     else if (S_ISLNK(file_info2.st_mode))
     {
         // Este o legătură simbolică
-        char something[20] = "leg simbolica\n";
-        write(statistica_fd, entry->d_name,strlen(entry->d_name));
+        char something[20] = "este leg simbolica\n";
+        write(statistica_fd, entry_name,strlen(entry_name));
         write_statistics_symbolic_link(statistica_fd, filePath, &file_info2, file_name);
     }
     else if (S_ISREG(file_info.st_mode) && S_ISLNK(file_info2.st_mode) == 0)
     {
         // daca e fisier obisnuit, fara bmp
-        char something[200] = "fisier obisnuit fara bmp\n";
+        char something[200] = "este fisier obisnuit fara bmp\n";
         write(statistica_fd, something,strlen(something) );
-        write_statistics_non_bmp(statistica_fd,  entry->d_name, &file_info);
+        write_statistics_non_bmp(statistica_fd,  entry_name, &file_info);
 
     }
-    }
-    // Închide directorul de intrare
-    closedir(dir);
 }
 
+void process_dir(const char *input_dir, const char *output_dir) {
+    DIR *dir = open_director(input_dir);
 
+    // Parcurge fiecare intrare din director
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL) {
+    // Ignoră intrările curente și părinte
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+        continue;
+    }
+        process_entry(input_dir, output_dir, entry->d_name);
+    }
+    // Închide directorul de intrare
+   close_director(dir);
+}
 
 int main(int argc, char *argv[])
 {
-    if(argc != 2) /* ./program <director_intrare> */
+    if(argc != 3) /* ./program <director_intrare> <director iesire> */
     {
-        printf("Usage %s <director_intrare>\n", argv[0]);
+        printf("Usage %s <director_intrare> <director_iesire> \n", argv[0]);
         exit(1);
     }
     
     int statistica_fd = create_stat_file();
-    process_director(argv[1], statistica_fd);
+    process_dir(argv[1], argv[2]);
     
     close(statistica_fd);
     return 0;

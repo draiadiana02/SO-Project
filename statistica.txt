@@ -1,6 +1,6 @@
 
 director/folder
-director
+este director
 Nume director: folder
 Identificatorul utilizatorului: 1000
 Drepturi de acces user: RWX
@@ -20,7 +20,7 @@ Drepturi de acces grup: R--
 Drepturi de acces altii: R--
 
 director/leg_simbolica.c
-fisier obisnuit fara bmp
+este fisier obisnuit fara bmp
 Nume fisier: leg_simbolica.c
 Dimensiune in octeti: <1618>
 Identificatorul utilizatorului: <1000>
@@ -40,7 +40,7 @@ Drepturi de acces grup legatura: R--
 Drepturi de acces altii legatura: R--
 
 director/target_file.txt
-fisier obisnuit fara bmp
+este fisier obisnuit fara bmp
 Nume fisier: target_file.txt
 Dimensiune in octeti: <16>
 Identificatorul utilizatorului: <1000>
