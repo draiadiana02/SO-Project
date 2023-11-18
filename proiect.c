@@ -477,28 +477,32 @@ void process_dir(const char *input_dir, const char *output_dir) {
         printf("Numărul de linii scrise de către procesul cu PID-ul %d: %d\n", pid, num_linii_fiu);
     close(pfd[0]);
 
-    //char *ext = strrchr(entry->d_name, '.');
+    char *ext = strrchr(entry->d_name, '.');
 
-    // if (ext && strcmp(ext, ".bmp") == 0) {
+    if (ext && strcmp(ext, ".bmp") == 0) {
         
-    //     pid_t pid2;
+        pid_t pid2;
         
-    //     pid2 = fork();
-    //     num_processes++;
-    //     if (pid2 == -1)
-    //     {
-    //         perror("Eroare la fork");
-    //         exit(-1);
-    //     }
-    //     if (pid2 == 0)
-    //     {
-    //         // calea completă pentru imaginea bmp
-    //         char bmp_path[512];
-    //         sprintf(bmp_path, "%s/%s", input_dir, entry->d_name);
-    //         convert_to_gray(bmp_path);
-    //         exit(2);
-    //     }
-    // }
+        pid2 = fork();
+        num_processes++;
+        if (pid2 == -1)
+        {
+            perror("Eroare la fork");
+            exit(-1);
+        }
+        if (pid2 == 0)
+        {
+            // calea completă pentru imaginea bmp
+            char bmp_path[512];
+            sprintf(bmp_path, "%s/%s", input_dir, entry->d_name);
+            //convert_to_gray(bmp_path);
+            // nu functioneaza:((((((
+            exit(2);
+        }
+        int status2;
+        waitpid(pid2, &status2, 0);
+        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid2, WEXITSTATUS(status2));
+    }
 
 }
     
