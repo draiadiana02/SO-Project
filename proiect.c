@@ -4,8 +4,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <dirent.h>
+#include <stdint.h>
 
 DIR *open_director(const char *director_name) 
 {
@@ -290,69 +292,153 @@ void write_statistics_director(int statistica_fd, const char *file_name, struct 
     write(statistica_fd, buffer_str, strlen(buffer_str));
 }
 
-void process_entry(const char *file_name, const char *output_dir, const char *entry_name)
+void write_new_line(int statistica_fd)
 {
-        // Construiește calea completă pentru fiecare intrare
-        char filePath[512];
-        char newLine[2] = "\n";
-        write(statistica_fd, newLine,strlen(newLine) );
-        sprintf(filePath, "%s/%s", file_name, entry_name);
-        write(statistica_fd, filePath, strlen(filePath));
-        write(statistica_fd, newLine,strlen(newLine) );
-        
-        //variabilele pentru statistici
+    char newLine[2] = "\n";
+    write(statistica_fd, newLine,strlen(newLine) );
+}
+
+void count_lines(char *output_file_path, int pipe_fd[2])
+{
+    int num_linii = 0;
+    char linie[512]; // Dimensiunea maximă a unei linii
+
+    // Deschide fișierul pentru citire
+    int statistica_fd_citire = open(output_file_path, O_RDONLY);
+    if (statistica_fd_citire == -1) {
+        perror("Eroare la deschiderea fișierului de statistica pentru citire");
+        exit(1);
+    }
+
+    // Numără liniile utilizând read()
+    char caracter;
+    while (read(statistica_fd_citire, &caracter, 1) > 0) {
+        if (caracter == '\n') {
+            num_linii++;
+        }
+    }
+
+    // Trimite numărul de linii către procesul părinte prin pipe
+    write(pipe_fd[1], &num_linii, sizeof(int));
+
+    // Închide fișierul și pipe-ul
+    close(statistica_fd_citire);
+}
+
+void process_entry(const char *file_name, const char *output_dir, const char *entry_name, int pipe_fd[2])
+{
+    // Construiește calea completă pentru fișierul de ieșire
+    char output_file_path[512];
+    sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry_name);
+
+    // Deschide fișierul de ieșire în directorul corespunzător
+    int statistica_fd = open(output_file_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
+    if (statistica_fd == -1) {
+        perror("Eroare la deschiderea fișierului de statistica");
+        exit(1);
+    }
+
+    // Construiește calea completă pentru fiecare intrare
+    char filePath[512];
+    sprintf(filePath, "%s/%s", file_name, entry_name);
+    write(statistica_fd, filePath, strlen(filePath));
+
+    // Variabilele pentru statistici
     int width, height, size;
     struct stat file_info;
-    if (stat(filePath, &file_info) == -1)
-    {
+    if (stat(filePath, &file_info) == -1) {
         perror("Eroare la obtinerea informatiilor despre fisier");
         exit(1);
     }
 
-    // in caz ca fisierul dat e legatura simbolica
+    // În caz că fisierul dat e legatura simbolica
     struct stat file_info2;
     if (lstat(filePath, &file_info2) == -1) {
         perror("Eroare la obținerea informațiilor despre leg simbolica");
         exit(EXIT_FAILURE);
     }
 
-    //verific extensia fisierului pentru a vedea de ce tip e, daca e bmp
+    // Verific extensia fisierului pentru a vedea de ce tip e, daca e bmp
     char *ext = strrchr(entry_name, '.');
-    
-     if (ext && strcmp(ext, ".bmp") == 0) {
-        // daca e fisier bmp
+
+    if (ext && strcmp(ext, ".bmp") == 0) {
+        // Daca e fisier bmp
         int input_fd = open(filePath, O_RDONLY);
         read_bmp_info(input_fd, &width, &height, &size);
         write_statistics(statistica_fd, entry_name, width, height, size, &file_info);
-    }
-    else if (S_ISDIR(file_info.st_mode)) 
-    {
-         // Este un director
+    } else if (S_ISDIR(file_info.st_mode)) {
+        // Este un director
         char something[20] = "este director\n";
-        write(statistica_fd, something,strlen(something) );
+        write(statistica_fd, something, strlen(something));
         write_statistics_director(statistica_fd, entry_name, &file_info);
-       
-    }
-    else if (S_ISLNK(file_info2.st_mode))
-    {
+    } else if (S_ISLNK(file_info2.st_mode)) {
         // Este o legătură simbolică
         char something[20] = "este leg simbolica\n";
-        write(statistica_fd, entry_name,strlen(entry_name));
+        write(statistica_fd, entry_name, strlen(entry_name));
         write_statistics_symbolic_link(statistica_fd, filePath, &file_info2, file_name);
-    }
-    else if (S_ISREG(file_info.st_mode) && S_ISLNK(file_info2.st_mode) == 0)
-    {
-        // daca e fisier obisnuit, fara bmp
+    } else if (S_ISREG(file_info.st_mode) && S_ISLNK(file_info2.st_mode) == 0) {
+        // Daca e fisier obisnuit, fara bmp
         char something[200] = "este fisier obisnuit fara bmp\n";
-        write(statistica_fd, something,strlen(something) );
-        write_statistics_non_bmp(statistica_fd,  entry_name, &file_info);
-
+        write(statistica_fd, something, strlen(something));
+        write_statistics_non_bmp(statistica_fd, entry_name, &file_info);
     }
+    count_lines(output_file_path, pipe_fd);
+    close(statistica_fd);
 }
+
+void convert_to_gray(const char *filePath)
+{
+    int width, height, size;
+    struct stat file_info;
+    if (stat(filePath, &file_info) == -1) {
+        perror("Eroare la obtinerea informatiilor despre fisier");
+        exit(1);
+    }
+    int input_fd = open(filePath, O_RDWR);
+    read_bmp_info(input_fd, &width, &height, &size);
+    int nr_pixels = width * height;
+
+    // Calcularea padding-ului pe linie
+    int padding = (4 - (width * 3) % 4) % 4;
+
+    // Deplasare la începutul zonei Raster Data
+    lseek(input_fd, 54, SEEK_SET);
+
+    // Parcurgerea fiecarui pixel si aplicarea formulei de conversie la tonuri de gri
+    for (int i = 0; i < nr_pixels; ++i) {
+        uint8_t pixel[3];
+
+        // Citirea valorilor RGB ale pixelului
+        if (read(input_fd, pixel, sizeof(pixel)) == -1) {
+            perror("Eroare la citirea pixelului din fisier");
+            exit(1);
+        }
+
+        // Aplicarea formulei pentru conversie la tonuri de gri
+        uint8_t grayscale = 0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0];
+
+        // Deplasare la locația corectă în fișier pentru a suprascrie valorile
+        lseek(input_fd, 3, SEEK_CUR);
+        write(input_fd, &grayscale, sizeof(uint8_t));
+        write(input_fd, &grayscale, sizeof(uint8_t));
+        write(input_fd, &grayscale, sizeof(uint8_t));
+        
+        lseek(input_fd, padding, SEEK_CUR);
+    }
+    // Inchiderea fisierului BMP
+    close(input_fd);
+}
+
 
 void process_dir(const char *input_dir, const char *output_dir) {
     DIR *dir = open_director(input_dir);
+    int num_processes = 0;
 
+    int pfd[2];
+    if (pipe(pfd) < 0) {
+        perror("Eroare la crearea pipe-ului");
+        exit(EXIT_FAILURE);
+    }
     // Parcurge fiecare intrare din director
     struct dirent *entry;
 
@@ -361,10 +447,61 @@ void process_dir(const char *input_dir, const char *output_dir) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
         continue;
     }
-        process_entry(input_dir, output_dir, entry->d_name);
+   
+    int pid = fork();
+    num_processes++;
+
+    if (pid == -1)
+    {
+        perror("Eroare la fork");
+        exit(-1);
     }
+    if (pid == 0)
+    {
+        close(pfd[0]);
+        process_entry(input_dir, output_dir, entry->d_name, pfd);
+        close(pfd[1]);
+        exit(2);
+    }
+    char *ext = strrchr(entry->d_name, '.');
+
+    // if (ext && strcmp(ext, ".bmp") == 0) {
+        
+    //     pid_t pid2;
+        
+    //     pid2 = fork();
+    //     num_processes++;
+    //     if (pid2 == -1)
+    //     {
+    //         perror("Eroare la fork");
+    //         exit(-1);
+    //     }
+    //     if (pid2 == 0)
+    //     {
+    //         // calea completă pentru imaginea bmp
+    //         char bmp_path[512];
+    //         sprintf(bmp_path, "%s/%s", input_dir, entry->d_name);
+    //         convert_to_gray(bmp_path);
+    //         exit(2);
+    //     }
+    // }
+
+}
+    printf("%d", num_processes);
+    close(pfd[1]);
+    int status;
+    for (int i = 0; i < num_processes; ++i) {
+        pid_t pid = wait(&status);
+        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid, WEXITSTATUS(status));
+
+        int num_linii_fiu;
+        read(pfd[0], &num_linii_fiu, sizeof(int));
+
+        printf("Numărul de linii scrise de către procesul cu PID-ul %d: %d\n", pid, num_linii_fiu);
+    }
+    close(pfd[0]);
     // Închide directorul de intrare
-   close_director(dir);
+    close_director(dir);
 }
 
 int main(int argc, char *argv[])
@@ -375,9 +512,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
     
-    int statistica_fd = create_stat_file();
     process_dir(argv[1], argv[2]);
-    
-    close(statistica_fd);
+
     return 0;
 }

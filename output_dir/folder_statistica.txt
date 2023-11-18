@@ -1,0 +1,6 @@
+director/foldereste director
+Nume director: folder
+Identificatorul utilizatorului: 1000
+Drepturi de acces user: RWX
+Drepturi de acces grup: R-X
+Drepturi de acces altii: R-X
