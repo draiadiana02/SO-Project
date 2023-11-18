@@ -434,11 +434,7 @@ void process_dir(const char *input_dir, const char *output_dir) {
     DIR *dir = open_director(input_dir);
     int num_processes = 0;
 
-    int pfd[2];
-    if (pipe(pfd) < 0) {
-        perror("Eroare la crearea pipe-ului");
-        exit(EXIT_FAILURE);
-    }
+    
     // Parcurge fiecare intrare din director
     struct dirent *entry;
 
@@ -446,6 +442,11 @@ void process_dir(const char *input_dir, const char *output_dir) {
     // Ignoră intrările curente și părinte
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
         continue;
+    }
+    int pfd[2];
+    if (pipe(pfd) < 0) {
+        perror("Eroare la crearea pipe-ului");
+        exit(EXIT_FAILURE);
     }
    
     int pid = fork();
@@ -463,7 +464,20 @@ void process_dir(const char *input_dir, const char *output_dir) {
         close(pfd[1]);
         exit(2);
     }
-    char *ext = strrchr(entry->d_name, '.');
+
+    //printf("%d", num_processes);
+    close(pfd[1]);
+    int status;
+        waitpid(pid, &status, 0);
+        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid, WEXITSTATUS(status));
+
+        int num_linii_fiu;
+        read(pfd[0], &num_linii_fiu, sizeof(int));
+
+        printf("Numărul de linii scrise de către procesul cu PID-ul %d: %d\n", pid, num_linii_fiu);
+    close(pfd[0]);
+
+    //char *ext = strrchr(entry->d_name, '.');
 
     // if (ext && strcmp(ext, ".bmp") == 0) {
         
@@ -487,19 +501,7 @@ void process_dir(const char *input_dir, const char *output_dir) {
     // }
 
 }
-    printf("%d", num_processes);
-    close(pfd[1]);
-    int status;
-    for (int i = 0; i < num_processes; ++i) {
-        pid_t pid = wait(&status);
-        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid, WEXITSTATUS(status));
-
-        int num_linii_fiu;
-        read(pfd[0], &num_linii_fiu, sizeof(int));
-
-        printf("Numărul de linii scrise de către procesul cu PID-ul %d: %d\n", pid, num_linii_fiu);
-    }
-    close(pfd[0]);
+    
     // Închide directorul de intrare
     close_director(dir);
 }
