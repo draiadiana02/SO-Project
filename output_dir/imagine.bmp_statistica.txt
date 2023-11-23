@@ -1,9 +1,9 @@
 director/imagine.bmpNume fisier: imagine.bmp
 Inaltime: 1280
-Lungime: 1920
+Lungime: 1807
 Dimensiune in octeti: <7372938>
 Identificatorul utilizatorului: <1000>
-Timpul ultimei modificari: 18.11.2023
+Timpul ultimei modificari: 20.11.2023
 Numarul de legaturi: <1>
 Drepturi de acces user: RW-
 Drepturi de acces grup: R--

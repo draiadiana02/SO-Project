@@ -388,46 +388,27 @@ void process_entry(const char *file_name, const char *output_dir, const char *en
 
 void convert_to_gray(const char *filePath)
 {
-    int width, height, size;
-    struct stat file_info;
-    if (stat(filePath, &file_info) == -1) {
-        perror("Eroare la obtinerea informatiilor despre fisier");
-        exit(1);
-    }
     int input_fd = open(filePath, O_RDWR);
-    read_bmp_info(input_fd, &width, &height, &size);
-    int nr_pixels = width * height;
 
-    // Calcularea padding-ului pe linie
-    int padding = (4 - (width * 3) % 4) % 4;
+    int data_offset;
 
-    // Deplasare la începutul zonei Raster Data
-    lseek(input_fd, 54, SEEK_SET);
+    lseek(input_fd, 10, SEEK_SET);
+    read(input_fd, &data_offset, 4);
+    lseek(input_fd, data_offset, SEEK_SET);
 
-    // Parcurgerea fiecarui pixel si aplicarea formulei de conversie la tonuri de gri
-    for (int i = 0; i < nr_pixels; ++i) {
-        uint8_t pixel[3];
+        char pixel[3];
+        ssize_t bytesRead;
 
-        // Citirea valorilor RGB ale pixelului
-        if (read(input_fd, pixel, sizeof(pixel)) == -1) {
-            perror("Eroare la citirea pixelului din fisier");
-            exit(1);
+        while ((bytesRead = read(input_fd, pixel, sizeof(pixel))) > 0) {
+            char grayscale = 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2];
+            memset(pixel, grayscale, sizeof(pixel));
+            lseek(input_fd, -bytesRead, SEEK_CUR);
+            write(input_fd, pixel, sizeof(pixel));
         }
-
-        // Aplicarea formulei pentru conversie la tonuri de gri
-        uint8_t grayscale = 0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0];
-
-        // Deplasare la locația corectă în fișier pentru a suprascrie valorile
-        lseek(input_fd, 3, SEEK_CUR);
-        write(input_fd, &grayscale, sizeof(uint8_t));
-        write(input_fd, &grayscale, sizeof(uint8_t));
-        write(input_fd, &grayscale, sizeof(uint8_t));
-        
-        lseek(input_fd, padding, SEEK_CUR);
-    }
     // Inchiderea fisierului BMP
     close(input_fd);
 }
+
 
 
 void process_dir(const char *input_dir, const char *output_dir) {
@@ -495,7 +476,7 @@ void process_dir(const char *input_dir, const char *output_dir) {
             // calea completă pentru imaginea bmp
             char bmp_path[512];
             sprintf(bmp_path, "%s/%s", input_dir, entry->d_name);
-            //convert_to_gray(bmp_path);
+            convert_to_gray(bmp_path);
             // nu functioneaza:((((((
             exit(2);
         }
