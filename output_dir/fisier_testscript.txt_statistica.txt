@@ -1,0 +1,9 @@
+director/fisier_testscript.txteste fisier obisnuit fara bmp
+Nume fisier: fisier_testscript.txt
+Dimensiune in octeti: <116>
+Identificatorul utilizatorului: <1000>
+Timpul ultimei modificari: 03.12.2023
+Numarul de legaturi: <1>
+Drepturi de acces user: RWX
+Drepturi de acces grup: R-X
+Drepturi de acces altii: R-X

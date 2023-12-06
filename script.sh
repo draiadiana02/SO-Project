@@ -17,9 +17,9 @@ while read -r line; do
     fi
     if echo "$line" | grep -E -q "$regex" && 
         echo "$line" | grep -E -q -v ",[ ]*si"; then
-        ((counter++))
+        counter=$((counter + 1))
     fi
 done
-#done < "fisier_testscript.txt"
+#done < "director/fisier_testscript.txt"
 
-echo "Numarul de propozitii corecte cu caracterul '$char': $counter"
+echo $counter

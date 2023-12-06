@@ -3,7 +3,7 @@ Inaltime: 426
 Lungime: 640
 Dimensiune in octeti: <818058>
 Identificatorul utilizatorului: <1000>
-Timpul ultimei modificari: 23.11.2023
+Timpul ultimei modificari: 06.12.2023
 Numarul de legaturi: <1>
 Drepturi de acces user: RW-
 Drepturi de acces grup: R--

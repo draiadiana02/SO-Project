@@ -8,6 +8,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <stdint.h>
+#include <ctype.h>
 
 DIR *open_director(const char *director_name) 
 {
@@ -406,45 +407,114 @@ void process_entry(const char *file_name, const char *output_dir, const char *en
     close(statistica_fd);
 }
 
-void process_dir(const char *input_dir, const char *output_dir) {
+void process_dir(const char *input_dir, const char *output_dir, char c) {
     DIR *dir = open_director(input_dir);
-    int num_processes = 0;
 
     // Parcurge fiecare intrare din director
     struct dirent *entry;
+    int suma_total=0;
 
     while ((entry = readdir(dir)) != NULL) {
     // Ignoră intrările curente și părinte
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
         continue;
     }
-    char output_file_path[512];
-    sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry->d_name);
-    num_processes++;
+    if(strstr(entry->d_name, ".bmp") == NULL && entry->d_type == DT_REG )
+    {
+        char output_file_path[512];
+        sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry->d_name);
 
-    int pid = fork();
-    if (pid == -1)
-    {
-        perror("Eroare la fork");
-        exit(-1);
-    }
-    if (pid == 0) //procesul fiu responsabil cu scrierea in fisiere
-    {
-        process_entry(input_dir, output_dir, entry->d_name);
+        char filePath[512];
+        sprintf(filePath, "%s/%s", input_dir, entry->d_name);
+
+        int pipeFF[2]; // pipe fiu1->fiu2
+        int pipeFP[2]; // pipe fiu->parinte
+        if (pipe(pipeFF) < 0) {
+            perror("Eroare la crearea pipe-ului");
+            exit(-1);
+        }
+        if (pipe(pipeFP) < 0) {
+            perror("Eroare la crearea pipe-ului");
+            exit(-1);
+        }
+
+        int pid = fork();
+        if (pid == -1)
+        {
+            perror("Eroare la fork");
+            exit(-1);
+        }
+        if (pid == 0) //procesul fiu responsabil cu scrierea in fisiere
+        {
+            process_entry(input_dir, output_dir, entry->d_name);
+            //acest fisier acum va genera folosind o comanda continutul fisierului obisnuit fara extensie bmp pentru care a extras informatiile si va transmite celuilalt proces fiu
+            close(pipeFP[0]);
+            close(pipeFP[1]);
+            close(pipeFF[0]); // scrie in pipe pentru ca procesul cu nr 2 sa citeasca
+            if (dup2(pipeFF[1], STDOUT_FILENO) == -1) {
+                perror("Eroare la redirectarea iesirii standard");
+                exit(EXIT_FAILURE);
+            }
+            execlp("cat", "cat", filePath, (char *) NULL);
+            close(pipeFF[1]); //inchid capatul de scriere
+            perror("Eroare la exec");
+            exit(2);
+        }
+        //procesul parinte
         int num_linii_fisier = count_lines(output_file_path);
-        exit(num_linii_fisier);
+        int status;
+        waitpid(pid, &status, 0);
+        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid, WEXITSTATUS(status));
+
+        int pid2 = fork();
+        if (pid2 == -1)
+        {
+            perror("Eroare la fork");
+            exit(-1);
+        }
+        if (pid2 == 0)
+        {
+            close(pipeFP[0]);
+            close(pipeFF[1]); // acest proces va citi din pipe, inchid scrierea
+            dup2(pipeFF[0], 0); // redirecționez citirea , sa citeasca din pipe ce a transmis primul proces fiu
+            close(pipeFF[0]);
+            dup2(pipeFP[1], 1);//redirectez scrierea
+            close(pipeFP[1]);
+            char cstring[2];
+            cstring[0] = c;
+            cstring[1] = '\0';
+            execlp("./script.sh", "./script.sh", cstring ,NULL); // rulam scriptul 
+            perror("Eroare la executarea scriptului!");
+            exit(2);
+        }
+
+        close(pipeFF[0]);
+        close(pipeFF[1]);
+        close(pipeFP[1]);
+        dup2(pipeFP[0],0);//redirectez citirea
+
+        int numarTotal=0;
+        char buffer[256];
+        int rd;
+        while ((rd = read(pipeFP[0], &buffer, sizeof(buffer))) > 0) {
+            numarTotal=atoi(buffer);
+            suma_total=numarTotal+suma_total;
+        }
+        close(pipeFP[0]);
+
+        int status2;
+        waitpid(pid2, &status2, 0);
+        printf("S-a incheiat procesul cu PID-ul %d si codul %d\n", pid2, WEXITSTATUS(status2));
+        
+        printf("Numarul de propozitii corecte pentru procesul cu PID-ul %d: %d\n", pid2, numarTotal);
+
     }
-    //procesul parinte
-    int status;
-    waitpid(pid, &status, 0);
-    printf("S-a încheiat procesul cu PID-ul %d și codul(nr de linii) %d\n", pid, WEXITSTATUS(status));
 
     char *ext = strrchr(entry->d_name, '.');
     if (ext && strcmp(ext, ".bmp") == 0) {
         
         pid_t pidBMP;  
         pidBMP = fork();
-        num_processes++;
         if (pidBMP == -1)
         {
             perror("Eroare la fork");
@@ -458,26 +528,30 @@ void process_dir(const char *input_dir, const char *output_dir) {
             convert_to_gray(bmp_path);
             exit(2);
         }
-        int status2;
-        waitpid(pidBMP, &status2, 0);
-        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pidBMP, WEXITSTATUS(status2));
+        int status3;
+        waitpid(pidBMP, &status3, 0);
+        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pidBMP, WEXITSTATUS(status3));
     }
-
-    
 }  
+    printf("Au fost identificate in total %d propozitii corecte care contin caracterul %c\n", suma_total, c);
     // Închide directorul de intrare
     close_director(dir);
 }
 
 int main(int argc, char *argv[])
 {
-    if(argc != 3) /* ./program <director_intrare> <director iesire> */
-    {
-        printf("Usage %s <director_intrare> <director_iesire> \n", argv[0]);
+    if (argc != 4) {
+        printf("Usage: %s <director_intrare> <director_iesire> <c>\n", argv[0]);
         exit(1);
     }
-    
-    process_dir(argv[1], argv[2]);
 
+    // Converteste al treilea argument la un caracter alfanumeric
+    if (strlen(argv[3]) != 1 || !isalnum(argv[3][0])) {
+        printf("Argumentul <c> trebuie sa fie un caracter alfanumeric.\n");
+        exit(1);
+    }
+    char c = argv[3][0];
+    
+    process_dir(argv[1], argv[2], c);
     return 0;
 }
