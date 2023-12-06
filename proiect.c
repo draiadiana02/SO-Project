@@ -8,9 +8,6 @@
 #include <time.h>
 #include <dirent.h>
 #include <stdint.h>
-#include <ctype.h>
-
-#define MAX_CONTENT_SIZE 512
 
 DIR *open_director(const char *director_name) 
 {
@@ -301,7 +298,30 @@ void write_new_line(int statistica_fd)
     write(statistica_fd, newLine,strlen(newLine) );
 }
 
-void count_lines(char *output_file_path, int pipe_fd[2])
+void convert_to_gray(const char *filePath)
+{
+    int input_fd = open(filePath, O_RDWR);
+
+    int data_offset;
+
+    lseek(input_fd, 10, SEEK_SET);
+    read(input_fd, &data_offset, 4);
+    lseek(input_fd, data_offset, SEEK_SET);
+
+        char pixel[3];
+        ssize_t bytesRead;
+
+        while ((bytesRead = read(input_fd, pixel, sizeof(pixel))) > 0) {
+            char grayscale = 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2];
+            memset(pixel, grayscale, sizeof(pixel));
+            lseek(input_fd, -bytesRead, SEEK_CUR);
+            write(input_fd, pixel, sizeof(pixel));
+        }
+    // Inchiderea fisierului BMP
+    close(input_fd);
+}
+
+int count_lines(char *output_file_path)
 {
     int num_linii = 0;
     char linie[512]; // Dimensiunea maximă a unei linii
@@ -321,14 +341,12 @@ void count_lines(char *output_file_path, int pipe_fd[2])
         }
     }
 
-    // Trimite numărul de linii către procesul părinte prin pipe
-    write(pipe_fd[1], &num_linii, sizeof(int));
-
     // Închide fișierul și pipe-ul
     close(statistica_fd_citire);
+    return num_linii;
 }
 
-void process_entry(const char *file_name, const char *output_dir, const char *entry_name, int pipe_fd[2])
+void process_entry(const char *file_name, const char *output_dir, const char *entry_name)
 {
     // Construiește calea completă pentru fișierul de ieșire
     char output_file_path[512];
@@ -384,41 +402,14 @@ void process_entry(const char *file_name, const char *output_dir, const char *en
         char something[200] = "este fisier obisnuit fara bmp\n";
         write(statistica_fd, something, strlen(something));
         write_statistics_non_bmp(statistica_fd, entry_name, &file_info);
-
     }
-    count_lines(output_file_path, pipe_fd);
     close(statistica_fd);
 }
 
-void convert_to_gray(const char *filePath)
-{
-    int input_fd = open(filePath, O_RDWR);
-
-    int data_offset;
-
-    lseek(input_fd, 10, SEEK_SET);
-    read(input_fd, &data_offset, 4);
-    lseek(input_fd, data_offset, SEEK_SET);
-
-        char pixel[3];
-        ssize_t bytesRead;
-
-        while ((bytesRead = read(input_fd, pixel, sizeof(pixel))) > 0) {
-            char grayscale = 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2];
-            memset(pixel, grayscale, sizeof(pixel));
-            lseek(input_fd, -bytesRead, SEEK_CUR);
-            write(input_fd, pixel, sizeof(pixel));
-        }
-    // Inchiderea fisierului BMP
-    close(input_fd);
-}
-
-
-void process_dir(const char *input_dir, const char *output_dir, char c) {
+void process_dir(const char *input_dir, const char *output_dir) {
     DIR *dir = open_director(input_dir);
     int num_processes = 0;
 
-    
     // Parcurge fiecare intrare din director
     struct dirent *entry;
 
@@ -427,124 +418,39 @@ void process_dir(const char *input_dir, const char *output_dir, char c) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
         continue;
     }
-    char *ext = strrchr(entry->d_name, '.');
-    //daca nu e fisier bmp
-    if (ext && strcmp(ext, ".bmp") != 0) {
-        
-        int pfd[2];
-        int pfd3[2];
-        if (pipe(pfd) < 0) {
-            perror("Eroare la crearea pipe-ului");
-            exit(EXIT_FAILURE);
-        }
-        if (pipe(pfd3) < 0) {
-            perror("Eroare la crearea pipe-ului");
-            exit(EXIT_FAILURE);
-        }
-    
-        int pid = fork();
-        num_processes++;
+    char output_file_path[512];
+    sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry->d_name);
+    num_processes++;
 
-        if (pid == -1)
-        {
-            perror("Eroare la fork");
-            exit(-1);
-        }
-        if (pid == 0)
-        {
-            close(pfd[0]);
-            close(pfd3[0]); // scrie in pipe pentru ca procesul cu nr 2 sa citeasca
-            process_entry(input_dir, output_dir, entry->d_name, pfd);
-
-            if (dup2(pfd3[1], STDOUT_FILENO) == -1) {
-                perror("Eroare la redirectarea iesirii standard");
-                exit(EXIT_FAILURE);
-            }
-            close(pfd3[1]);
-            close(pfd[1]);
-            char output_file_path[512];
-            sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry->d_name);
-            int statistica_fd = open(output_file_path, O_RDONLY);
-            execlp("cat", "cat", output_file_path , (char *) NULL);
-            perror("Eroare la exec");
-            // exit(2);
-        }
-
-        //printf("%d", num_processes);
-        close(pfd[1]);
-        int status;
-        waitpid(pid, &status, 0);
-        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid, WEXITSTATUS(status));
-
-        int num_linii_fiu;
-        read(pfd[0], &num_linii_fiu, sizeof(int));
-
-        printf("Numărul de linii scrise de către procesul cu PID-ul %d: %d\n", pid, num_linii_fiu);
-        close(pfd[0]);
-
-        //al doilea proces fiu pentru fisierele obisnuite
-        pid_t pid2;
-        int pfd2[2];
-        if(pipe(pfd2) < 0) {
-            perror("Eroare la crearea celui de-al doilea pipe");
-            exit(EXIT_FAILURE);
-        }
-        pid2 = fork();
-        num_processes++;
-        if(pid2 == -1) {
-            perror("Eroare la fork");
-            exit(EXIT_FAILURE);
-        }
-
-        if(pid2 == 0) {
-            
-            close(pfd2[0]); //se va scrie in pipe
-            close(pfd3[1]); // primul proces fiu scrie in pipe, iar acest proces fiu citeste din pipe
-            
-            //aici trebuie sa citesc ce imi trimite primul proces
-            // Citim datele de la primul proces fiu
-            //cati bytes sa citesc din pipe??? cat am scris? cum aflu
-            char buffer[MAX_CONTENT_SIZE];
-            ssize_t bytesRead = read(pfd3[0], buffer, MAX_CONTENT_SIZE);
-            if (bytesRead < 0) {
-                perror("Eroare la citirea din pipe");
-                exit(EXIT_FAILURE);
-            }
-
-            close(pfd2[1]);
-            close(pfd3[0]);
-            // Executăm scriptul pentru a obține numărul de propoziții corecte
-            if (execlp("./script.sh", "./script.sh", (char[]){c, '\0'}, (char *)NULL) == -1) {
-                perror("Eroare la execuția scriptului");
-                exit(EXIT_FAILURE);
-            }
-            exit(2);
-        }
-        close(pfd2[1]); //se va citi din pipe
-        int status2;
-        waitpid(pid2, &status2, 0);
-        printf("S-a incheiat procesul cu PID-ul %d si codul %d\n", pid2, WEXITSTATUS(status2));
-
-        int num_prop = 5;
-        close(pfd2[0]);
-        
-        printf("Numarul de propozitii corecte pentru procesul cu PID-ul %d: %d\n", pid2, num_prop);
-
-
+    int pid = fork();
+    if (pid == -1)
+    {
+        perror("Eroare la fork");
+        exit(-1);
     }
+    if (pid == 0) //procesul fiu responsabil cu scrierea in fisiere
+    {
+        process_entry(input_dir, output_dir, entry->d_name);
+        int num_linii_fisier = count_lines(output_file_path);
+        exit(num_linii_fisier);
+    }
+    //procesul parinte
+    int status;
+    waitpid(pid, &status, 0);
+    printf("S-a încheiat procesul cu PID-ul %d și codul(nr de linii) %d\n", pid, WEXITSTATUS(status));
 
+    char *ext = strrchr(entry->d_name, '.');
     if (ext && strcmp(ext, ".bmp") == 0) {
         
-        pid_t pid2;
-        
-        pid2 = fork();
+        pid_t pidBMP;  
+        pidBMP = fork();
         num_processes++;
-        if (pid2 == -1)
+        if (pidBMP == -1)
         {
             perror("Eroare la fork");
             exit(-1);
         }
-        if (pid2 == 0)
+        if (pidBMP == 0)
         {
             // calea completă pentru imaginea bmp
             char bmp_path[512];
@@ -553,31 +459,25 @@ void process_dir(const char *input_dir, const char *output_dir, char c) {
             exit(2);
         }
         int status2;
-        waitpid(pid2, &status2, 0);
-        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pid2, WEXITSTATUS(status2));
+        waitpid(pidBMP, &status2, 0);
+        printf("S-a încheiat procesul cu PID-ul %d și codul %d\n", pidBMP, WEXITSTATUS(status2));
     }
 
-}
     
+}  
     // Închide directorul de intrare
     close_director(dir);
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc != 4) {
-        printf("Usage: %s <director_intrare> <director_iesire> <c>\n", argv[0]);
+    if(argc != 3) /* ./program <director_intrare> <director iesire> */
+    {
+        printf("Usage %s <director_intrare> <director_iesire> \n", argv[0]);
         exit(1);
     }
-
-    // Converteste al treilea argument la un caracter alfanumeric
-    if (strlen(argv[3]) != 1 || !isalnum(argv[3][0])) {
-        printf("Argumentul <c> trebuie sa fie un caracter alfanumeric.\n");
-        exit(1);
-    }
-    char c = argv[3][0];
     
-    process_dir(argv[1], argv[2], c);
+    process_dir(argv[1], argv[2]);
 
     return 0;
 }
