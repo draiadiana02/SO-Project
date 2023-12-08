@@ -1,7 +1,7 @@
 director/symbolic_link.txtsymbolic_link.txt
 Nume legatura: director/symbolic_link.txt
 Dimensiune legatura: 15
-Dimensiune fisier target: 16
+Dimensiune fisier target: 35
 Drepturi de acces user legatura: RW-
 Drepturi de acces grup legatura: R--
 Drepturi de acces altii legatura: R--

@@ -419,10 +419,12 @@ void process_dir(const char *input_dir, const char *output_dir, char c) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
         continue;
     }
+
+    char output_file_path[512];
+    sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry->d_name);
+    
     if(strstr(entry->d_name, ".bmp") == NULL && entry->d_type == DT_REG )
     {
-        char output_file_path[512];
-        sprintf(output_file_path, "%s/%s_statistica.txt", output_dir, entry->d_name);
 
         char filePath[512];
         sprintf(filePath, "%s/%s", input_dir, entry->d_name);
@@ -508,6 +510,25 @@ void process_dir(const char *input_dir, const char *output_dir, char c) {
         
         printf("Numarul de propozitii corecte pentru procesul cu PID-ul %d: %d\n", pid2, numarTotal);
 
+    }
+    if (entry->d_type == DT_DIR || entry->d_type == DT_LNK)
+    {
+        int pid3 = fork();
+        if (pid3 == -1)
+        {
+            perror("Eroare la fork");
+            exit(-1);
+        }
+        if(pid3 == 0)
+        {
+            process_entry(input_dir, output_dir, entry->d_name);
+            int num_linii_fisier = count_lines(output_file_path);
+            exit(num_linii_fisier);
+        }
+        int status3;
+        waitpid(pid3, &status3, 0);
+        printf("S-a încheiat procesul cu PID-ul %d și codul(nr de linii) %d\n", pid3, WEXITSTATUS(status3));
+        
     }
 
     char *ext = strrchr(entry->d_name, '.');

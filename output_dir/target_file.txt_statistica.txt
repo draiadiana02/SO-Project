@@ -1,8 +1,8 @@
 director/target_file.txteste fisier obisnuit fara bmp
 Nume fisier: target_file.txt
-Dimensiune in octeti: <16>
+Dimensiune in octeti: <35>
 Identificatorul utilizatorului: <1000>
-Timpul ultimei modificari: 13.11.2023
+Timpul ultimei modificari: 08.12.2023
 Numarul de legaturi: <1>
 Drepturi de acces user: RW-
 Drepturi de acces grup: R--
